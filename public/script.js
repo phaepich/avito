@@ -251,3 +251,37 @@ function displayAd(ad, isNew = false) {
   adList.prepend(adItem); // Добавляем новое объявление в начало списка
 }
 
+
+// Проверка, поддерживает ли браузер уведомления
+if ('Notification' in window) {
+  // Запрос на разрешение уведомлений
+  Notification.requestPermission().then((permission) => {
+    if (permission === 'granted') {
+      console.log('Разрешение на уведомления получено');
+    } else {
+      console.log('Разрешение на уведомления отклонено');
+    }
+  });
+} else {
+  console.log('Браузер не поддерживает системные уведомления');
+}
+
+
+
+// Функция для показа системного уведомления
+function showNotification(ad) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const notification = new Notification('Новое объявление на Avito', {
+      body: `${ad.title} - ${ad.price}`,
+      icon: ad.imageUrl || 'placeholder.jpg', // Используем изображение объявления (если есть)
+    });
+
+    // Уведомление автоматически исчезнет через 4 секунды
+    setTimeout(() => {
+      notification.close();
+    }, 4000);
+  } else {
+    console.log('Уведомления не поддерживаются или не разрешены.');
+  }
+}
+

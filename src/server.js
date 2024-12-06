@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const mongoose = require('mongoose');
 const socketIo = require('socket.io');
+const cors = require('cors')
 const Ad = require('./models/adModel');
 const Filter = require('./models/filterModel');
 const scrapeAvito = require('./services/avitoScraper');
@@ -12,10 +13,17 @@ let currentFilters = []; // Хранение текущих фильтров
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server); // Настройка WebSocket
+const io = socketIo(server, { // Настройка WebSocket
+  cors: {
+    origin: '*', // Разрешить все источники
+    methods: ['GET', 'POST'], // Разрешенные методы
+  }
+});
+
 
 app.use(express.json());
 app.use(express.static('public')); // Статические файлы для фронтенда
+app.use(cors())
 
 // Подключение к MongoDB
 mongoose.connect('mongodb://localhost:27017/avito-monitoring', {
