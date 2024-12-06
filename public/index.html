@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Авито Мониторинг</title>
+  <link rel="stylesheet" href="styles.css"> <!-- Подключаем внешний CSS файл -->
+</head>
+
+<body>
+  <header>
+    <h1>Авито Мониторинг</h1>
+  </header>
+
+  <div class="container">
+    <!-- Форма для фильтров, сообщений, автоотправки и частоты опроса (горизонтально) -->
+    <div class="form-row">
+      <!-- Форма для добавления фильтра -->
+      <div class="form-section">
+        <h2>Добавить фильтр</h2>
+        <div class="form-group">
+          <label for="filter-url">Введите URL фильтра:</label>
+          <input type="text" id="filter-url" placeholder="https://www.avito.ru/..." required>
+        </div>
+        <button id="add-filter-btn">Добавить фильтр</button>
+      </div>
+
+      <!-- Форма для ввода сообщения -->
+      <div class="form-section">
+        <h2>Сообщение для отправки</h2>
+        <div class="form-group">
+          <label for="message-template">Введите сообщение:</label>
+          <textarea id="message-template" rows="4" placeholder="Введите сообщение..."></textarea>
+        </div>
+        <button id="save-message-btn">Сохранить сообщение</button>
+      </div>
+
+      <!-- Переключатель автоотправки сообщений -->
+      <div class="form-section checkbox-group">
+        <label for="auto-send">Автоотправка при новом объявлении</label>
+        <input type="checkbox" id="auto-send">
+      </div>
+
+      <!-- Выбор частоты опроса -->
+      <div class="form-section settings-group">
+        <label for="interval">Частота опроса (в минутах):</label>
+        <input type="number" id="interval" value="5" min="1">
+      </div>
+    </div>
+
+    <!-- Блок для отображения сохраненного сообщения -->
+    <div id="message-status" class="status-message"></div>
+
+    <!-- Список объявлений (в сетке) -->
+    <div class="announcement-list" id="ad-list"></div>
+  </div>
+
+  <footer>
+    <p>Авито Мониторинг © 2024</p>
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
