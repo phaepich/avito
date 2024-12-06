@@ -39,10 +39,11 @@ h1 {
   background-color: rgba(0, 0, 0, 0.05); /* Затемнение */
   border-radius: 10px; /* Закругленные углы */
   padding: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 0px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Легкая тень */
   transition: all 0.3s ease-in-out; /* Плавный переход */
 }
+
 
 /* Эффект при наведении на блок */
 .form-section:hover {
@@ -66,7 +67,7 @@ h1 {
 input[type="text"],
 input[type="number"],
 textarea {
-  width: 100%;
+  width: 95%;
   padding: 10px;
   margin: 5px 0 10px;
   border: 1px solid #ccc;
@@ -81,6 +82,45 @@ input[type="number"]:focus,
 textarea:focus {
   border-color: #3498db; /* Цвет рамки при фокусе */
   outline: none;
+}
+
+/* Стили для списка фильтров */
+.filter-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.filter-list li {
+  margin: 5px 0;
+  cursor: pointer;
+}
+
+.filter-list li:hover {
+  text-decoration: underline;
+}
+
+.filter-list li {
+  max-width: 100%; /* Ограничение ширины ссылки */
+  overflow: hidden;
+  text-overflow: ellipsis; /* Обрезаем длинные ссылки */
+  white-space: nowrap;
+}
+
+/* Добавление кнопки для раскрытия списка */
+#filter-list {
+  display: block;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 5px;
+}
+
+.filter-item {
+  display: flex;
+  justify-content: space-between; /* Разделяем ссылку и кнопки */
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 /* Стили для кнопок */
@@ -175,10 +215,12 @@ button:hover {
 
 /* Ссылка на объявление */
 .ad-link {
-  color: #3498db;
-  text-decoration: none;
-  margin-top: 10px;
-  font-weight: bold;
+  display: inline-block;
+  max-width: calc(100% - 120px); /* Учитываем размер кнопок */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Показываем многоточие для длинных ссылок */
+  text-decoration: none; /* Убираем подчеркивание */
 }
 
 .ad-link:hover {

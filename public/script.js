@@ -1,6 +1,5 @@
 const socket = io('http://localhost:3000'); // Подключение к WebSocket серверу
 const displayedAds = new Set(); // Храним уже показанные объявления
-let currentBatch = 1; // Текущий номер партии
 
 // Уведомление о подключении и отключении
 socket.on('connect', () => {
@@ -12,7 +11,7 @@ socket.on('disconnect', () => {
 });
 
 socket.on('update-ad', (updatedAd) => {
-  // Обновляем объявление в списке (например, через DOM или state-фреймворк)
+  // Обновляем объявление в списке
   console.log('Получено обновленное объявление:', updatedAd);
 });
 
@@ -28,82 +27,202 @@ socket.on('new-ad', (ad) => {
   displayAd(ad, true); // Отображаем новое объявление с подсветкой
 });
 
+// Включение/выключение парсинга
+const parsingToggle = document.getElementById('parsing-toggle');
+parsingToggle.addEventListener('change', () => {
+  const state = parsingToggle.checked;
+  fetch('/set-parsing', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ state }),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      console.log(`Парсинг ${data.isParsing ? 'включен' : 'выключен'}`);
+    })
+    .catch((error) => console.error('Ошибка при изменении состояния парсинга:', error));
+});
+
+
 // Массив для хранения фильтров
 let filters = [];
 let message = "";
 
+// Функция для отображения списка фильтров
+function displayFilters() {
+  console.log('Функция displayFilters вызвана');
+  const filterList = document.getElementById('filter-list');
+  if (!filterList) {
+    console.error('Элемент filter-list не найден');
+    return;
+  }
+  filterList.innerHTML = ''; // Очищаем список
+
+  fetch('/filters')
+    .then((response) => response.json())
+    .then((data) => {
+      console.log('Фильтры с сервера:', data.filters); // Логируем данные
+      filters = data.filters;
+      filters.forEach((filter) => {
+        const li = document.createElement('li');
+        li.classList.add('filter-item'); // Классу li присваиваем стиль для flex
+
+        const link = document.createElement('span');
+        link.classList.add('ad-link');
+        link.textContent = filter.url;
+
+        // Кнопка для активации/деактивации
+        const toggleBtn = document.createElement('button');
+        toggleBtn.textContent = filter.isActive ? 'Деактивировать' : 'Активировать';
+        toggleBtn.addEventListener('click', () => toggleFilter(filter._id, !filter.isActive));
+
+        // Кнопка для удаления фильтра
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Удалить';
+        deleteBtn.addEventListener('click', () => deleteFilter(filter._id));
+
+        // Добавляем ссылку и кнопки в контейнер
+        li.appendChild(link);
+        li.appendChild(toggleBtn);
+        li.appendChild(deleteBtn);
+
+        // Добавляем фильтр в список
+        filterList.appendChild(li);
+      });
+    })
+    .catch((error) => console.error('Ошибка при загрузке фильтров:', error));
+}
+
+
+
+// Переключение активации фильтра
+function toggleFilter(id, isActive) {
+  fetch('/toggle-filter', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, isActive }),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.success) {
+        displayFilters(); // Обновляем список
+      } else {
+        alert('Не удалось изменить состояние фильтра.');
+      }
+    })
+    .catch((error) => console.error('Ошибка при переключении фильтра:', error));
+}
+
+// Удаление фильтра
+function deleteFilter(id) {
+  fetch(`/delete-filter/${id}`, { method: 'DELETE' })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.success) {
+        alert('Фильтр удален.');
+        displayFilters(); // Обновляем список
+      } else {
+        alert('Не удалось удалить фильтр.');
+      }
+    })
+    .catch((error) => console.error('Ошибка при удалении фильтра:', error));
+}
+
+// Загружаем список фильтров при старте страницы
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Скрипт загружен, вызывается DOMContentLoaded');
+  displayFilters();
+});
+
+
 // Функция для добавления фильтра
-document.getElementById('add-filter-btn').addEventListener('click', function() {
+document.getElementById('add-filter-btn').addEventListener('click', function () {
   const filterUrl = document.getElementById('filter-url').value;
   if (filterUrl) {
-    // Отправляем фильтр на сервер для сохранения в базе данных
+    // Отправляем фильтр на сервер
     fetch('/add-filter', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ url: filterUrl })
+      body: JSON.stringify({ url: filterUrl }),
     })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        alert("Фильтр успешно добавлен!");
-      } else {
-        alert("Произошла ошибка при добавлении фильтра.");
-      }
-    })
-    .catch(error => {
-      console.error("Ошибка при добавлении фильтра:", error);
-      alert("Ошибка при добавлении фильтра.");
-    });
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          alert(data.message);
+          displayFilters(); // Обновляем список фильтров
+        } else {
+          alert(data.message || 'Ошибка при добавлении фильтра.');
+        }
+      })
+      .catch((error) => {
+        console.error('Ошибка при добавлении фильтра:', error);
+        alert('Ошибка при добавлении фильтра.');
+      });
   } else {
-    alert("Пожалуйста, введите URL фильтра.");
+    alert('Пожалуйста, введите URL фильтра.');
   }
 });
-// Функция для отображения фильтров в списке
-function displayFilters() {
-  const filterList = document.getElementById('filter-list');
-  filterList.innerHTML = ''; // Очищаем список
-  filters.forEach(filter => {
-    const li = document.createElement('li');
-    li.textContent = filter;
-    filterList.appendChild(li);
-  });
+
+// Сохранение частоты опроса
+const saveIntervalBtn = document.getElementById('save-interval-btn');
+saveIntervalBtn.addEventListener('click', () => {
+  const interval = parseInt(document.getElementById('polling-interval').value, 10);
+
+  if (interval < 1) {
+    alert('Частота должна быть больше 0 секунд.');
+    return;
+  }
+
+  fetch('/set-interval', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ interval }),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.success) {
+        alert(`Частота опроса установлена на ${data.interval} секунд.`);
+      } else {
+        alert('Не удалось изменить частоту опроса.');
+      }
+    })
+    .catch((error) => {
+      console.error('Ошибка при изменении частоты опроса:', error);
+    });
+});
+
+// Запрос объявлений с сервера при загрузке страницы
+function fetchAndDisplayAds() {
+  fetch('/ads')
+    .then((response) => response.json())
+    .then((ads) => {
+      console.log('Загруженные объявления:', ads);
+      const adList = document.getElementById('ad-list');
+      adList.innerHTML = ''; // Очищаем список перед рендерингом
+
+      ads.forEach((ad) => {
+        displayedAds.add(ad.url); // Добавляем URL в Set
+        displayAd(ad); // Отображаем объявления
+      });
+    })
+    .catch((error) => {
+      console.error('Ошибка при загрузке объявлений:', error);
+    });
 }
 
-// Функция для сохранения сообщения
-document.getElementById('save-message-btn').addEventListener('click', function() {
-  const message = document.getElementById('message-template').value;
-  if (message) {
-    // Отправляем сообщение на сервер для сохранения (например, в базе данных)
-    fetch('/save-message', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ message: message })
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        // Отображаем сообщение в блоке на странице
-        const statusMessage = document.getElementById('message-status');
-        statusMessage.textContent = "Сообщение успешно сохранено!";
-        statusMessage.style.color = "green";
-      } else {
-        alert("Ошибка при сохранении сообщения.");
-      }
-    })
-    .catch(error => {
-      console.error("Ошибка при сохранении сообщения:", error);
-      alert("Ошибка при сохранении сообщения.");
-    });
-  } else {
-    alert("Пожалуйста, введите сообщение.");
-  }
-});
+// Вызов функции при загрузке страницы
+window.onload = () => {
+  fetchAndDisplayAds();
+};
 
-// Функция для отображения объявления
+
+
 function displayAd(ad, isNew = false) {
   const adList = document.getElementById('ad-list');
   if (!adList) {
@@ -111,9 +230,9 @@ function displayAd(ad, isNew = false) {
     return;
   }
 
-  const adItem = document.createElement('div'); // Используем `div` для гибкости
+  const adItem = document.createElement('div'); // Создаем элемент объявления
   adItem.classList.add('announcement'); // Класс для стилизации
-  if (isNew && ad.batch > currentBatch) {
+  if (isNew) {
     adItem.classList.add('new-ad'); // Добавляем подсветку для новых объявлений
   }
   adItem.innerHTML = `
@@ -128,42 +247,7 @@ function displayAd(ad, isNew = false) {
       <button class="view-ad-button">Посмотреть объявление</button>
     </a>
   `;
-  
-  // Добавляем новое объявление в начало списка
-  adList.prepend(adItem);
+
+  adList.prepend(adItem); // Добавляем новое объявление в начало списка
 }
 
-// Запрашиваем номер текущей партии
-function fetchCurrentBatch() {
-  return fetch('http://localhost:3000/current-batch') // Запрос к серверу для текущего номера партии
-    .then((response) => response.json())
-    .then((data) => {
-      console.log('Текущая партия загружена:', data.currentBatch);
-      return data.currentBatch;
-    })
-    .catch((error) => {
-      console.error('Ошибка при загрузке текущей партии:', error);
-      return 1; // Возвращаем 1 по умолчанию
-    });
-}
-
-// Запрашиваем последние объявления при загрузке страницы
-window.onload = async () => {
-  console.log('Запрашиваем текущую партию и последние объявления');
-  currentBatch = await fetchCurrentBatch(); // Получаем номер текущей партии
-
-  fetch('http://localhost:3000/ads') // Запрос к серверу для получения всех объявлений
-    .then((response) => response.json())
-    .then((ads) => {
-      console.log('Объявления загружены:', ads);
-      ads.forEach((ad) => {
-        if (!displayedAds.has(ad.url)) {
-          displayedAds.add(ad.url);
-          displayAd(ad, ad.batch > currentBatch); // Подсвечиваем только новые объявления
-        }
-      });
-    })
-    .catch((error) => {
-      console.error('Ошибка при загрузке объявлений:', error);
-    });
-};

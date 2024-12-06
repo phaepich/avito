@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Авито Мониторинг</title>
-  <link rel="stylesheet" href="styles.css"> <!-- Подключаем внешний CSS файл -->
+  <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
@@ -25,31 +25,33 @@
         <button id="add-filter-btn">Добавить фильтр</button>
       </div>
 
-      <!-- Форма для ввода сообщения -->
       <div class="form-section">
-        <h2>Сообщение для отправки</h2>
+        <h2>Настройка частоты опроса</h2>
         <div class="form-group">
-          <label for="message-template">Введите сообщение:</label>
-          <textarea id="message-template" rows="4" placeholder="Введите сообщение..."></textarea>
+          <label for="polling-interval">Частота опроса (в секундах):</label>
+          <input type="number" id="polling-interval" value="10" min="5">
         </div>
-        <button id="save-message-btn">Сохранить сообщение</button>
+        <button id="save-interval-btn">Сохранить частоту</button>
       </div>
-
-      <!-- Переключатель автоотправки сообщений -->
-      <div class="form-section checkbox-group">
-        <label for="auto-send">Автоотправка при новом объявлении</label>
-        <input type="checkbox" id="auto-send">
+      
+      <div class="form-section">
+        <h2>Управление парсером</h2>
+        <div class="form-group">
+          <label for="parsing-toggle">Включить парсер:</label>
+          <input type="checkbox" id="parsing-toggle">
+        </div>
       </div>
-
-      <!-- Выбор частоты опроса -->
-      <div class="form-section settings-group">
-        <label for="interval">Частота опроса (в минутах):</label>
-        <input type="number" id="interval" value="5" min="1">
-      </div>
+      
     </div>
 
     <!-- Блок для отображения сохраненного сообщения -->
     <div id="message-status" class="status-message"></div>
+
+    <!-- Список фильтров (в раскрываемом списке) -->
+    <div class="form-section">
+      <h2>Список фильтров</h2>
+      <ul id="filter-list" class="filter-list"></ul>
+    </div>
 
     <!-- Список объявлений (в сетке) -->
     <div class="announcement-list" id="ad-list"></div>

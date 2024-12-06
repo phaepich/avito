@@ -5,6 +5,10 @@ const socketIo = require('socket.io');
 const Ad = require('./models/adModel');
 const Filter = require('./models/filterModel');
 const scrapeAvito = require('./services/avitoScraper');
+let isParsing = false; // Состояние парсинга (по умолчанию выключен)
+let pollingInterval = 10000; // Частоlet currentFilters = []; // Хранение текущих фильтров
+let currentFilters = []; // Хранение текущих фильтров
+
 
 const app = express();
 const server = http.createServer(app);
@@ -23,6 +27,17 @@ mongoose.connect('mongodb://localhost:27017/avito-monitoring', {
   console.error('MongoDB connection error:', err);
 });
 
+// При запуске сервера загружаем текущие фильтры
+(async () => {
+  try {
+    currentFilters = await Filter.find();
+    console.log('Текущие фильтры при старте сервера:', currentFilters);
+  } catch (error) {
+    console.error('Ошибка при загрузке фильтров при старте сервера:', error);
+  }
+})();
+
+
 // Обработчик WebSocket-соединений
 io.on('connection', (socket) => {
   console.log('Клиент подключился');
@@ -34,15 +49,9 @@ io.on('connection', (socket) => {
 
 const Batch = require('./models/batchModel');
 
-// Функция для парсинга и добавления объявления
+// Функция для парсинга и добавления объявлений
 async function parseAndSaveAds(ads) {
-  let batchData = await Batch.findOne();
-  if (!batchData) {
-    batchData = await Batch.create({ currentBatch: 1 }); // Создаем запись, если ее нет
-  }
-
-  const currentBatch = batchData.currentBatch;
-  for (let ad of ads) {
+  for (const ad of ads) {
     // Проверяем существование объявления в базе данных
     const existingAd = await Ad.findOne({ url: ad.url });
 
@@ -51,12 +60,12 @@ async function parseAndSaveAds(ads) {
       const newAd = await Ad.create(ad);
       console.log('Новое объявление добавлено в базу:', newAd);
 
-      // Отправляем новое объявление всем подключенным клиентам
-      io.emit('new-ad', newAd);
+      // Отправляем новое объявление всем подключенным клиентам через WebSocket
+      io.emit('new-ad', newAd); // Передача нового объявления клиенту
       console.log('Новое объявление отправлено клиенту:', newAd);
     } else {
       // Проверяем, изменились ли данные объявления
-      let updatedFields = {};
+      const updatedFields = {};
 
       if (ad.price !== existingAd.price) {
         updatedFields.price = ad.price;
@@ -78,39 +87,105 @@ async function parseAndSaveAds(ads) {
 
         console.log('Объявление обновлено:', updatedAd);
 
-        // Отправляем обновление всем подключенным клиентам
+        // Передаем обновленное объявление клиентам
         io.emit('update-ad', updatedAd);
         console.log('Обновленное объявление отправлено клиенту:', updatedAd);
       }
     }
-  // Увеличиваем номер партии только после обработки новых данных
-  await Batch.updateOne({}, { currentBatch: currentBatch + 1 });
   }
 }
+
+
+app.get('/filters', async (req, res) => {
+  try {
+    const filters = await Filter.find(); // Получаем все фильтры
+    console.log('Фильтры из базы данных:', filters); // Логируем полученные данные
+    res.json({ filters }); // Отправляем их в формате JSON
+  } catch (error) {
+    console.error('Ошибка при получении фильтров:', error);
+    res.status(500).json({ message: 'Ошибка сервера.' });
+  }
+});
+
+
+// Маршрут для управления парсингом
+app.post('/set-parsing', (req, res) => {
+  const { state } = req.body; // Получаем новое состояние
+  isParsing = state;
+  console.log(`Состояние парсинга изменено: ${isParsing ? 'включено' : 'выключено'}`);
+  res.json({ success: true, isParsing });
+});
+
+// Маршрут для изменения частоты опроса
+app.post('/set-interval', (req, res) => {
+  const { interval } = req.body;
+
+  if (interval < 1) {
+    return res.status(400).json({ success: false, message: 'Частота должна быть больше 0 секунд.' });
+  }
+
+  pollingInterval = interval * 1000; // Конвертируем в миллисекунды
+  console.log(`Частота опроса изменена на ${pollingInterval / 1000} секунд.`);
+  res.json({ success: true, interval });
+});
+
+// Маршрут для установки режима работы
+app.post('/set-mode', (req, res) => {
+  const { mode } = req.body; // Получаем режим (true/false)
+  onlyNewAds = mode;
+  console.log(`Режим работы изменен: ${onlyNewAds ? 'только новые' : 'обычный'}`);
+  res.json({ success: true, onlyNewAds });
+});
+
 // Функция для мониторинга фильтров
 async function monitorFilters() {
-  const filters = await Filter.find(); // Получаем все фильтры из базы данных
-
-  for (const filter of filters) {
-    console.log(`Начинаем парсинг для фильтра: ${filter.url}`);
-    try {
-      const ads = await scrapeAvito(filter.url);
-      //console.log('Объявления после парсинга:', ads);
-      console.log('parsing done. ads: ',ads.length);
-      await parseAndSaveAds(ads); // Проверяем и сохраняем объявления
-    } catch (error) {
-      console.error(`Ошибка парсинга для фильтра ${filter.url}:`, error);
-    }
-
-    // Ждем перед обработкой следующего фильтра
-    await new Promise((resolve) => setTimeout(resolve, 20000)); // Задержка 30 секунд
+  if (!isParsing) {
+    console.log('Парсинг выключен. Ожидание включения...');
+    setTimeout(monitorFilters, pollingInterval);
+    return;
   }
 
-  // Перезапускаем процесс через 1 минуту
-  setTimeout(monitorFilters, 10000);
+  // Загружаем только активные фильтры
+  currentFilters = await Filter.find({ isActive: true });
+
+  if (currentFilters.length === 0) {
+    console.log('Нет активных фильтров для парсинга.');
+    setTimeout(monitorFilters, pollingInterval);
+    return;
+  }
+
+  let filterIndex = 0;
+
+  const parseNextFilter = async () => {
+    if (!isParsing) {
+      console.log('Парсинг отключен.');
+      setTimeout(monitorFilters, pollingInterval);
+      return;
+    }
+
+    const filter = currentFilters[filterIndex];
+    console.log(`Парсим объявления для фильтра: ${filter.url}`);
+
+    try {
+      const ads = await scrapeAvito(filter.url);
+      console.log(`Найдено ${ads.length} объявлений для фильтра ${filter.url}`);
+      await parseAndSaveAds(ads);
+    } catch (error) {
+      console.error(`Ошибка при парсинге фильтра ${filter.url}:`, error);
+    }
+
+    filterIndex = (filterIndex + 1) % currentFilters.length;
+    setTimeout(parseNextFilter, pollingInterval);
+  };
+
+  parseNextFilter();
 }
 
+
+
+// Стартуем мониторинг фильтров
 monitorFilters();
+
 
 
 // Маршрут для получения всех объявлений, отсортированных по времени
@@ -124,27 +199,79 @@ app.get('/ads', async (req, res) => {
   }
 });
 
+app.post('/toggle-filter', async (req, res) => {
+  const { id, isActive } = req.body;
+
+  try {
+    const filter = await Filter.findByIdAndUpdate(
+      id,
+      { isActive },
+      { new: true } // Возвращаем обновленный документ
+    );
+
+    if (!filter) {
+      return res.status(404).json({ success: false, message: 'Фильтр не найден.' });
+    }
+
+    // Обновляем текущие фильтры
+    currentFilters = await Filter.find({ isActive: true });
+    console.log('Список активных фильтров обновлен:', currentFilters);
+
+    res.json({ success: true, filter });
+  } catch (error) {
+    console.error('Ошибка при изменении состояния фильтра:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера.' });
+  }
+});
+
+app.delete('/delete-filter/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const filter = await Filter.findByIdAndDelete(id);
+
+    if (!filter) {
+      return res.status(404).json({ success: false, message: 'Фильтр не найден.' });
+    }
+
+    // Обновляем текущие фильтры
+    currentFilters = await Filter.find({ isActive: true });
+    console.log('Список активных фильтров обновлен:', currentFilters);
+
+    res.json({ success: true, message: 'Фильтр удален.' });
+  } catch (error) {
+    console.error('Ошибка при удалении фильтра:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера.' });
+  }
+});
+
+
 
 // Маршрут для добавления нового фильтра и запуска парсинга
 app.post('/add-filter', async (req, res) => {
   const { url } = req.body;
   try {
-    // Сохраняем фильтр в базе данных
+    // Проверяем, существует ли такой фильтр
+    const existingFilter = await Filter.findOne({ url });
+    if (existingFilter) {
+      return res.status(400).json({ success: false, message: 'Этот фильтр уже добавлен.' });
+    }
+
+    // Сохраняем новый фильтр
     const filter = new Filter({ url });
     await filter.save();
 
-    // Парсим объявления для фильтра
-    const ads = await scrapeAvito(url);
-    console.log('Объявления после парсинга:', ads);
-    
-    await parseAndSaveAds(ads);
+    // Обновляем список текущих фильтров
+    currentFilters = await Filter.find(); // Загружаем новые фильтры
+    console.log('Список фильтров обновлен:', currentFilters);
 
-    res.status(200).json({ message: 'Filter added and ads parsed.' });
+    res.status(200).json({ success: true, message: 'Фильтр добавлен и объявления обработаны.' });
   } catch (error) {
     console.error('Ошибка при добавлении фильтра:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    res.status(500).json({ success: false, message: 'Ошибка сервера.' });
   }
 });
+
 
 // Маршрут для получения текущего номера партии
 app.get('/current-batch', async (req, res) => {
